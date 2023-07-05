@@ -142,6 +142,20 @@ local function append(t, ...)
   return r
 end
 
+---@generic T
+---@param t T
+---@return table
+local function copy(t)
+  if type(t) ~= "table" then
+    return t
+  end
+  local t2 = {}
+  for i, v in pairs(t) do
+    t2[i] = v
+  end
+  return t2
+end
+
 ---@param source string
 ---@return string "\r"|"\n"|"\r\n"
 local function guessNewline(source)
@@ -341,6 +355,7 @@ local function splitParagraphs(element)
   local block_name = ""
   local state_cmd = 0
   local cmd_name = ""
+  local extra_props = {}
   ---@type PodiumElement[]
   local paragraphs = {}
   ---@type string[]
@@ -457,12 +472,14 @@ local function splitParagraphs(element)
             endIndex,
             element.indentLevel,
             cmd_name,
-            table.concat(lines)
+            table.concat(lines),
+            copy(extra_props)
           )
         )
         startIndex = endIndex + 1
         lines = {}
         state_cmd = 0
+        extra_props = {}
       end
     else
       if line:match("^%s+$") then
@@ -478,6 +495,11 @@ local function splitParagraphs(element)
       elseif line:match("^[ \t]") then
         table.insert(lines, line)
         state_verb = 2
+      elseif line:match("^=for") then
+        table.insert(lines,line)
+        state_cmd = 1
+        cmd_name = "for"
+        extra_props.filetype = line:match("^=for%s+(%S+)")
       elseif line:match("^=") then
         table.insert(lines, line)
         state_cmd = 1
@@ -1479,8 +1501,9 @@ local markdown = PodiumBackend.new({
     _, element.startIndex =
       element.source:sub(1, element.endIndex):find("=for%s+%S+%s", element.startIndex)
     local nl = guessNewline(element.source)
+    local ft = element.extraProps.filetype or ""
     return {
-      parsed_token("```" .. nl, element.indentLevel, element.source),
+      parsed_token("```" .. ft .. nl, element.indentLevel, element.source),
       parsed_token(element.source:sub(element.startIndex, element.endIndex), element.indentLevel, element.source),
       parsed_token("```" .. nl, element.indentLevel, element.source),
     }
